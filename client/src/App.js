@@ -23,6 +23,31 @@ function App() {
     category: ''
   });
 
+  const [filters, setFilters] = useState({
+  category: 'all',
+  fromDate: '',
+  toDate: ""
+});
+
+const formatDateOnly = (dateStr) =>
+  new Date(dateStr).toISOString().split("T")[0];
+
+const filteredExpenses = expenses.filter((e) => {
+  const expenseDate = formatDateOnly(e.createdAt);
+
+  const matchCategory =
+    filters.category ==="all" || e.category === filters.category;
+
+  const matchFrom =
+    !filters.fromDate || expenseDate >= filters.fromDate;
+
+  const matchTo =
+    !filters.toDate || expenseDate <= filters.toDate;
+
+  return matchCategory && matchFrom && matchTo;
+});
+
+
   // Fetch expenses on load
   useEffect(() => {
     axios.get(API_URL).then(res => setExpenses(res.data));
@@ -110,12 +135,58 @@ const handleSubmit = (e) => {
           </form>
         </Paper>
 
+<Paper sx={{ p: 2, mb: 4 }}>
+  <Typography variant="h6" gutterBottom>
+    Filters
+  </Typography>
+  <Grid container spacing={2}>
+    <Grid item xs={12} sm={6}>
+      <TextField
+        select
+        label="Category"
+        fullWidth
+        SelectProps={{ native: true }}
+        value={filters.category}
+        onChange={(e) =>
+          setFilters((prev) => ({ ...prev, category: e.target.value }))
+        }
+      >
+        <option value="all">All</option>
+        {[...new Set(expenses.map((e) => e.category))].map((cat) => (
+          <option key={cat} value={cat}>
+            {cat}
+          </option>
+        ))}
+      </TextField>
+    </Grid>
+    <Grid item xs={12} sm={6}>
+<TextField
+  label="From Date"
+  type="date"
+  InputLabelProps={{ shrink: true }}
+  value={filters.fromDate}
+  onChange={(e) => setFilters((prev) => ({ ...prev, fromDate: e.target.value }))}
+/>
+
+<TextField
+  label="To Date"
+  type="date"
+  InputLabelProps={{ shrink: true }}
+  value={filters.toDate}
+  onChange={(e) => setFilters((prev) => ({ ...prev, toDate: e.target.value }))}
+/>
+
+    </Grid>
+  </Grid>
+</Paper>
+
+
         {/* Pie Chart Section */}
         <Paper sx={{ p: 2, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
             Expense Breakdown by Category
           </Typography>
-            <ExpenseChart expenses={expenses} />
+            <ExpenseChart expenses={filteredExpenses} />
         </Paper>
 
         {/* Total Spent */}
@@ -124,7 +195,7 @@ const handleSubmit = (e) => {
             Total Spent
           </Typography>
           <Typography variant="h4" color="primary">
-            ₹{expenses.reduce((sum, item) => sum + Number(item.amount), 0)}
+            ₹{filteredExpenses.reduce((sum, item) => sum + Number(item.amount), 0)}
           </Typography>
         </Paper>
 
@@ -133,7 +204,7 @@ const handleSubmit = (e) => {
           <Typography variant="h6" gutterBottom>
             Daily Expense Trend
           </Typography>
-          <ExpenseLineChart expenses={expenses} />
+          <ExpenseLineChart expenses={filteredExpenses} />
         </Paper>
 
 
@@ -152,7 +223,7 @@ const handleSubmit = (e) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {expenses.map((exp) => (
+              {filteredExpenses.map((exp) => (
                 <TableRow key={exp._id}>
                   <TableCell>{exp.description}</TableCell>
                   <TableCell>₹{exp.amount}</TableCell>
