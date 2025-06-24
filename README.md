@@ -83,7 +83,7 @@ Attach image/PDF to each expense
 
 Preview receipts in modal or new tab
 
-✅ Outcome: Professional features for financial users
+✅ Outcome: Professional features for financial users-
 
 🔁 Phase 5: Recurring & Reminders
 📅 Week 5: Automation and daily usability
@@ -98,7 +98,7 @@ E.g., “You spent ₹5000 this week”
 
 Optionally: Add email.js for alerts via email
 
-✅ Outcome: Smart, semi-automated tracking
+✅ Outcome: Smart, semi-automated tracking-
 
 🔧 Phase 6: Polish & Deploy Like a Pro
 📅 Week 6: Docs, shareability, optimization
