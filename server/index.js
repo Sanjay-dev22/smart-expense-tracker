@@ -28,6 +28,10 @@ mongoose.connect(process.env.MONGO_URI,)
 const expenseRoutes = require('./routes/expenses');
 app.use('/api/expenses', expenseRoutes);
 
+// Import and use auth routes 👇
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
