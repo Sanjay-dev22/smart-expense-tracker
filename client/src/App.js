@@ -9,6 +9,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import axios from 'axios';
 import ExpenseChart from './ExpenseChart';
 import ExpenseLineChart from './ExpenseLineChart';
+import { saveAs } from 'file-saver';
+import Papa from 'papaparse';
 
 
 
@@ -17,6 +19,9 @@ import ExpenseLineChart from './ExpenseLineChart';
 
 function App() {
   const [expenses, setExpenses] = useState([]);
+  const [searchText, setSearchText] = useState('');
+  const [sortBy, setSortBy] = useState("date-desc");
+
   const [form, setForm] = useState({
     description: '',
     amount: '',
@@ -44,7 +49,17 @@ const filteredExpenses = expenses.filter((e) => {
   const matchTo =
     !filters.toDate || expenseDate <= filters.toDate;
 
-  return matchCategory && matchFrom && matchTo;
+  const matchSearch =
+    e.description.toLowerCase().includes(searchText.toLowerCase());
+
+  return matchCategory && matchFrom && matchTo && matchSearch;
+});
+
+  const sortedExpenses = [...filteredExpenses].sort((a, b) => {
+    if (sortBy === "amount-asc") return a.amount - b.amount;
+    if (sortBy === "amount-desc") return b.amount - a.amount;
+    if (sortBy === "date-asc") return new Date(a.createdAt) - new Date(b.createdAt);
+    return new Date(b.createdAt) - new Date(a.createdAt); // Default: date-desc
 });
 
 
@@ -61,6 +76,20 @@ const handleSubmit = (e) => {
     setForm({ description: '', amount: '', category: '' });
   });
 };
+
+const handleExportCSV = () => {
+  const dataToExport = sortedExpenses.map(({ description, amount, category, createdAt }) => ({
+    description,
+    amount,
+    category,
+    date: new Date(createdAt).toLocaleDateString('en-GB')  // Formats to dd-mm-yyyy
+  }));
+
+  const csv = Papa.unparse(dataToExport);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  saveAs(blob, 'expenses.csv');
+};
+
 
   // Delete expense
   const handleDelete = (id) => {
@@ -180,13 +209,41 @@ const handleSubmit = (e) => {
   </Grid>
 </Paper>
 
+<Paper sx={{ p: 2, mb: 4 }}>
+  <TextField
+    label="Search Description"
+    variant="outlined"
+    value={searchText}
+    onChange={(e) => setSearchText(e.target.value)}
+    fullWidth
+  />
+</Paper>
+
+<Paper sx={{ p: 2, mb: 4 }}>
+  <TextField
+    select
+    label="Sort By"
+    fullWidth
+    SelectProps={{ native: true }}
+    value={sortBy}
+    onChange={(e) => setSortBy(e.target.value)}
+  >
+    <option value="date-desc">Date: Newest First</option>
+    <option value="date-asc">Date: Oldest First</option>
+    <option value="amount-desc">Amount: High to Low</option>
+    <option value="amount-asc">Amount: Low to High</option>
+  </TextField>
+</Paper>
+
+
+
 
         {/* Pie Chart Section */}
         <Paper sx={{ p: 2, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
             Expense Breakdown by Category
           </Typography>
-            <ExpenseChart expenses={filteredExpenses} />
+            <ExpenseChart expenses={sortedExpenses} />
         </Paper>
 
         {/* Total Spent */}
@@ -195,7 +252,7 @@ const handleSubmit = (e) => {
             Total Spent
           </Typography>
           <Typography variant="h4" color="primary">
-            ₹{filteredExpenses.reduce((sum, item) => sum + Number(item.amount), 0)}
+            ₹{sortedExpenses.reduce((sum, item) => sum + Number(item.amount), 0)}
           </Typography>
         </Paper>
 
@@ -204,8 +261,14 @@ const handleSubmit = (e) => {
           <Typography variant="h6" gutterBottom>
             Daily Expense Trend
           </Typography>
-          <ExpenseLineChart expenses={filteredExpenses} />
+          <ExpenseLineChart expenses={sortedExpenses} />
         </Paper>
+
+<Box display="flex" justifyContent="flex-end" mb={2}>
+  <Button variant="outlined" onClick={handleExportCSV}>
+    Export to CSV
+  </Button>
+</Box>
 
 
         {/* Expenses Table */}
@@ -223,7 +286,7 @@ const handleSubmit = (e) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredExpenses.map((exp) => (
+              {sortedExpenses.map((exp) => (
                 <TableRow key={exp._id}>
                   <TableCell>{exp.description}</TableCell>
                   <TableCell>₹{exp.amount}</TableCell>
