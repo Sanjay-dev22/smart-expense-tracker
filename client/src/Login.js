@@ -47,7 +47,13 @@ function Login({ setToken }) {
           Login
         </Button>
       </form>
-    </Paper>
+    <Typography variant="body2" sx={{ mt: 2 }}>
+      Don't have an account?{" "}
+      <Button onClick={() => navigate('/register')} size="small">
+        Register
+      </Button>
+    </Typography>
+  </Paper>
   );
 }
 
