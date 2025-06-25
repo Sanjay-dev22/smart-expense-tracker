@@ -2,9 +2,19 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const admin = require('firebase-admin');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// ✅ Initialize Firebase Admin SDK
+const serviceAccount = require('../serviceAccountKey.json');
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
 // Register route
 router.post('/register', async (req, res) => {
@@ -39,6 +49,29 @@ router.post('/login', async (req, res) => {
     res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (err) {
     res.status(500).json({ message: 'Login failed', error: err.message });
+  }
+});
+
+// 🆕 Google Sign-In Route using Firebase Admin
+router.post('/google', async (req, res) => {
+  const { idToken } = req.body;
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { email, name } = decodedToken;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({ name, email, password: 'google-oauth' });
+      await user.save();
+    }
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '2h' });
+
+    res.json({ token, user: { id: user._id, name, email } });
+  } catch (err) {
+    console.error('Firebase token verification failed:', err.message);
+    res.status(401).json({ message: 'Google login failed', error: err.message });
   }
 });
 
