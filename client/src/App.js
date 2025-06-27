@@ -7,6 +7,8 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 import Dashboard from './Dashboard';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
@@ -54,6 +56,8 @@ function App() {
               )
             }
           />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </Container>
     </Router>

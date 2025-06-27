@@ -11,6 +11,7 @@ import ExpenseLineChart from './ExpenseLineChart';
 import { saveAs } from 'file-saver';
 import Papa from 'papaparse';
 import axios from 'axios';
+import BudgetTracker from './BudgetTracker';
 
 const API_URL = 'http://localhost:5000/api/expenses';
 
@@ -91,7 +92,10 @@ function Dashboard() {
   });
 
   return (
+
     <>
+         <BudgetTracker expenses={expenses} />
+
       <Paper sx={{ p: 2, mb: 4 }}>
         <form onSubmit={handleSubmit}>
           <Grid container spacing={2}>
@@ -227,6 +231,7 @@ function Dashboard() {
               <TableCell>Description</TableCell>
               <TableCell>Amount</TableCell>
               <TableCell>Category</TableCell>
+              <TableCell>Date</TableCell>
               <TableCell>Action</TableCell>
             </TableRow>
           </TableHead>
@@ -236,6 +241,7 @@ function Dashboard() {
                 <TableCell>{exp.description}</TableCell>
                 <TableCell>₹{exp.amount}</TableCell>
                 <TableCell>{exp.category}</TableCell>
+                <TableCell>{new Date(exp.date || exp.createdAt).toLocaleDateString('en-GB').replace(/\//g, '-')}</TableCell>
                 <TableCell>
                   <IconButton color="error" onClick={() => handleDelete(exp._id)}>
                     <DeleteIcon />

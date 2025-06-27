@@ -7,31 +7,31 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ✅ Apply CORS *before* any routes
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+}));
+
+// ✅ Other middlewares
+app.use(bodyParser.json());
+
+// ✅ MongoDB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
+
+// ✅ Routes (CORS applies here now)
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/budget', require('./routes/budget')); // ⬅️ moved here
+
+// ✅ Test Route
 app.get('/', (req, res) => {
   res.send('API is running ✅');
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
-
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-
-// MongoDB Connection
-mongoose.connect(process.env.MONGO_URI,)
-  .then(() => console.log("✅ Connected to MongoDB"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
-
-// Routes
-const expenseRoutes = require('./routes/expenses');
-app.use('/api/expenses', expenseRoutes);
-
-// Import and use auth routes 👇
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
-
+// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
