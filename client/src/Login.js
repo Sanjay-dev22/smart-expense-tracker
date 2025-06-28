@@ -18,7 +18,7 @@ function Login({ setToken }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', form);
+      const res = await axios.post('${process.env.REACT_APP_API_URL}/api/auth/login', form);
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
       navigate('/');
@@ -46,7 +46,7 @@ useEffect(() => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
-      const res = await axios.post('http://localhost:5000/api/auth/google', { idToken });
+      const res = await axios.post('${process.env.REACT_APP_API_URL}/api/auth/google', { idToken });
 
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
@@ -102,7 +102,7 @@ useEffect(() => {
     sx={{ mt: 2 }}
     onClick={async () => {
       try {
-        await axios.post('http://localhost:5000/api/auth/resend-verification', { email: emailForResend });
+        await axios.post('${process.env.REACT_APP_API_URL}/api/auth/resend-verification', { email: emailForResend });
         alert('Verification link has been sent again to your email.');
       } catch (err) {
         alert('Failed to resend verification link.');

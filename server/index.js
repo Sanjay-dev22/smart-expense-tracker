@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ Apply CORS *before* any routes
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: 'process.env.CLIENT_URL,',
   credentials: true,
 }));
 
@@ -33,5 +33,5 @@ app.get('/', (req, res) => {
 
 // ✅ Start Server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

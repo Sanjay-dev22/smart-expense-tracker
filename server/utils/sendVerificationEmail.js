@@ -10,7 +10,7 @@ const sendVerificationEmail = async (email, token) => {
   });
 
   // ✅ Updated: Verification URL should point to backend route, not frontend
-  const verificationUrl = `http://localhost:5000/api/auth/verify-email?token=${token}`;
+  const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
 
   await transporter.sendMail({
     from: `"Smart Expense Tracker" <${process.env.EMAIL_USER}>`,
