@@ -54,7 +54,7 @@ function BudgetTracker({ expenses }) {
   e.preventDefault();
   try {
     const token = localStorage.getItem('token');
-    const res = await axios.post('${process.env.REACT_APP_API_URL}/api/budget',
+    const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/budget`,
       { amount: newBudget },
       {
         headers: {

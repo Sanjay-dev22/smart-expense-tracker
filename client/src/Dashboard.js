@@ -13,7 +13,7 @@ import Papa from 'papaparse';
 import axios from 'axios';
 import BudgetTracker from './BudgetTracker';
 
-const API_URL = '${process.env.REACT_APP_API_URL}/api/expenses';
+const API_URL = `${process.env.REACT_APP_API_URL}/api/expenses`;
 
 function Dashboard() {
   const [expenses, setExpenses] = useState([]);
