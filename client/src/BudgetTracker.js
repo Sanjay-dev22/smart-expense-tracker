@@ -22,7 +22,7 @@ function BudgetTracker({ expenses }) {
   const fetchBudget = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('${process.env.REACT_APP_API_URL}/api/budget', {
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/budget`, {
         headers: {
           Authorization: `Bearer ${token}`
         }

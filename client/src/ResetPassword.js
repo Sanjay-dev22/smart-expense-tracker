@@ -20,7 +20,7 @@ function ResetPassword() {
   const handleResetPassword = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('${process.env.REACT_APP_API_URL}/api/auth/reset-password', {
+      const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/reset-password`, {
         token,
         password,
       });
