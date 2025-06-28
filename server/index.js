@@ -7,10 +7,21 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://smart-expense-tracker-ten.vercel.app'
+];
+
 // ✅ Apply CORS *before* any routes
 app.use(cors({
-  origin: process.env.CLIENT_URL,
-  credentials: true,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed for this origin'));
+    }
+  },
+  credentials: true
 }));
 
 // ✅ Other middlewares
