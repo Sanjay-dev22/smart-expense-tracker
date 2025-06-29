@@ -41,15 +41,12 @@ router.post('/register', async (req, res) => {
 
 // Email verification route
 router.get('/verify-email', async (req, res) => {
-  console.log('Incoming token:', token);
   const token = req.query.token;
   if (!token) return res.status(400).send('<h2>❌ Invalid verification link.</h2>');
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
-    console.log('Decoded user ID:', decoded.id);
-
     if (!user) return res.status(404).send('<h2>❌ User not found.</h2>');
 
     if (user.verified) {
@@ -61,22 +58,9 @@ router.get('/verify-email', async (req, res) => {
 
     // Show confirmation HTML and redirect
     res.send(`
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <title>Email Verified</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #f9f9f9; }
-        h2 { color: green; }
-        a { text-decoration: none; color: blue; font-weight: bold; }
-      </style>
-    </head>
-    <body>
       <h2>✅ Email verified successfully!</h2>
       <p>You can now <a href="${process.env.CLIENT_URL}/login">login here</a>.</p>
-    </body>
-  </html>
-`);
+    `);
   } catch (err) {
     console.error('❌ Token verification failed:', err.message);
     res.status(400).send('<h2>❌ Invalid or expired token. Please register again.</h2>');

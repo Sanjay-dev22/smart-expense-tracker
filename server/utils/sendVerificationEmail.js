@@ -1,4 +1,4 @@
-//sendVerificationEmail.js
+// utils/sendVerificationEmail.js
 
 const nodemailer = require('nodemailer');
 
@@ -11,7 +11,7 @@ const sendVerificationEmail = async (email, token) => {
     }
   });
 
-  // ✅ Updated: Verification URL should point to backend route, not frontend
+  // ✅ FIXED: backend handles the token verification
   const verificationUrl = `${process.env.BACKEND_URL}/api/auth/verify-email?token=${token}`;
 
   await transporter.sendMail({
