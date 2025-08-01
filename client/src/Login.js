@@ -1,3 +1,5 @@
+// Client/src/Login.js
+
 import React, { useState } from 'react';
 import { TextField, Button, Paper, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -102,7 +104,7 @@ useEffect(() => {
     sx={{ mt: 2 }}
     onClick={async () => {
       try {
-           await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/resend-verification`, { email: emailForResend });
+        await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/resend-verification`, { email: emailForResend });
         alert('Verification link has been sent again to your email.');
       } catch (err) {
         alert('Failed to resend verification link.');

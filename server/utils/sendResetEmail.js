@@ -1,5 +1,3 @@
-// server/utils/sendResetEmail.js
-
 const nodemailer = require('nodemailer');
 
 const sendResetEmail = async (email, token) => {
@@ -18,10 +16,27 @@ const sendResetEmail = async (email, token) => {
     to: email,
     subject: 'Reset Your Password',
     html: `
-      <h3>Password Reset Requested</h3>
-      <p>Click the link below to reset your password:</p>
-      <a href="${resetUrl}">${resetUrl}</a>
-      <p>This link will expire in 15 minutes.</p>
+      <p>Hello,</p>
+      <p>We received a request to reset your password. Click the button below to proceed:</p>
+      <p>
+        <a href="${resetUrl}" style="
+          display: inline-block;
+          padding: 10px 20px;
+          background-color: #1976d2;
+          color: white;
+          text-decoration: none;
+          border-radius: 5px;
+          font-weight: bold;
+        ">
+          Reset Password
+        </a>
+      </p>
+      <p>If the button doesn't work, you can also click this link:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <br/>
+      <p><strong>This link will expire in 15 minutes.</strong></p>
+      <br/>
+      <p>Thanks,<br/>Smart Expense Tracker Team</p>
     `,
   });
 };

@@ -1,4 +1,3 @@
-// client/src/ExpenseChart.js
 import React from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
@@ -42,3 +41,4 @@ function ExpenseChart({ expenses }) {
 }
 
 export default ExpenseChart;
+

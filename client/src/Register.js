@@ -1,3 +1,5 @@
+// Client/src/Register.js
+
 import React, { useState } from 'react';
 import { TextField, Button, Paper, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';

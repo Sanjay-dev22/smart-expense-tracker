@@ -1,41 +1,45 @@
+// server/routes/budget.js
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../middleware/authMiddleware'); // 🔐 verify JWT
-const User = require('../models/User');
+const authenticate = require('../middleware/authMiddleware');
+const Budget = require('../models/Budget');
 
-// 🟢 POST /api/budget — Set or update monthly budget
+// Upsert monthly budget
 router.post('/', authenticate, async (req, res) => {
+  const { amount, month, year } = req.body;
+  if (amount == null || month == null || year == null) {
+    return res.status(400).json({ message: 'month, year, and amount are required' });
+  }
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount < 0) {
+    return res.status(400).json({ message: 'Invalid amount' });
+  }
+
   try {
-    let { amount } = req.body;
-
-    // Convert to number safely
-    amount = Number(amount);
-
-    if (isNaN(amount) || amount < 0) {
-      return res.status(400).json({ message: 'Invalid budget amount' });
-    }
-
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    user.budget = amount;
-    await user.save();
-
-    res.json({ message: 'Budget updated successfully', budget: user.budget });
+    const filter = { userId: req.user.id, month, year };
+    const update = { amount: numAmount };
+    const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
+    const bud = await Budget.findOneAndUpdate(filter, update, opts);
+    res.json({ budget: bud.amount, month, year });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to update budget', error: err.message });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// 🟢 GET /api/budget — Fetch current user's budget
+// Get budget for given month/year
 router.get('/', authenticate, async (req, res) => {
+  const month  = parseInt(req.query.month, 10);
+  const year   = parseInt(req.query.year, 10);
+  if (isNaN(month) || isNaN(year)) {
+    return res.status(400).json({ message: 'month and year query params required' });
+  }
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    res.json({ budget: user.budget || 0 });
+    const bud = await Budget.findOne({ userId: req.user.id, month, year });
+    res.json({ budget: bud ? bud.amount : 0, month, year });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch budget', error: err.message });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
