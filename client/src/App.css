@@ -1,0 +1,45 @@
+.App {
+  max-width: 600px;
+  margin: auto;
+  font-family: Arial;
+  padding: 20px;
+  background-color: #f9f9f9;
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+input, select, button {
+  padding: 10px;
+  font-size: 16px;
+}
+
+table {
+  margin-top: 20px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+
+button {
+  background-color: #008CBA;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:hover {
+  background-color: #006c8a;
+}
