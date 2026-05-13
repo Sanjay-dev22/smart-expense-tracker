@@ -17,11 +17,11 @@ export default function MetricCard({ label, value, helper, icon, tone = 'primary
       }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
             {label}
           </Typography>
-          <Typography variant="h3" sx={{ mt: 1 }}>
+          <Typography variant="h3" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
             {value}
           </Typography>
         </Box>

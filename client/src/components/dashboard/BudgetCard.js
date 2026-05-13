@@ -10,11 +10,11 @@ import {
   Typography,
 } from '@mui/material';
 import { getBudget, setBudget } from '../../services/budgetService';
-import { getExpenses } from '../../services/expenseService';
+import { getExpenseSummary } from '../../services/expenseService';
 import { formatCurrency } from '../../utils/formatters';
 import Panel from '../ui/Panel';
 
-export default function BudgetCard({ refreshExpenses, refreshTrigger }) {
+export default function BudgetCard({ refreshTrigger }) {
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [amount, setAmount] = useState(0);
@@ -40,9 +40,8 @@ export default function BudgetCard({ refreshExpenses, refreshTrigger }) {
     try {
       const fromDate = `${parsedYear}-${String(month + 1).padStart(2, '0')}-01`;
       const toDate = `${parsedYear}-${String(month + 1).padStart(2, '0')}-31`;
-      const expenseResponse = await getExpenses({ fromDate, toDate, page: 1, limit: 1000000 });
-      const total = (expenseResponse.data.expenses || []).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-      setSpent(total);
+      const expenseResponse = await getExpenseSummary({ fromDate, toDate });
+      setSpent(Number(expenseResponse.data.stats?.total || 0));
     } catch {
       setSpent(0);
     } finally {
@@ -52,8 +51,7 @@ export default function BudgetCard({ refreshExpenses, refreshTrigger }) {
 
   useEffect(() => {
     fetchData();
-    if (refreshExpenses) refreshExpenses();
-  }, [fetchData, refreshExpenses, refreshTrigger]);
+  }, [fetchData, refreshTrigger]);
 
   const percent = amount > 0 ? Math.min((spent / amount) * 100, 100) : 0;
   const remaining = Math.max(amount - spent, 0);
@@ -82,7 +80,7 @@ export default function BudgetCard({ refreshExpenses, refreshTrigger }) {
   };
 
   return (
-    <Panel title="Monthly Budget" eyebrow="Control center">
+    <Panel title="Monthly Budget" eyebrow="Budget">
       <Stack spacing={2.25}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <TextField select label="Month" value={month} onChange={(event) => setMonth(Number(event.target.value))} sx={{ minWidth: 160 }}>

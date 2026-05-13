@@ -15,8 +15,11 @@ import ExpenseList from '../components/expenses/ExpenseList';
 import MetricCard from '../components/ui/MetricCard';
 import Panel from '../components/ui/Panel';
 import LoadingState from '../components/ui/LoadingState';
-import { createExpense, deleteExpense, getExpenses, updateExpense } from '../services/expenseService';
-import { commonCategories, getExpenseStats, mergeCategories, sortExpenses } from '../utils/expenseUtils';
+import Toast from '../components/ui/Toast';
+import useDebouncedValue from '../hooks/useDebouncedValue';
+import useToast from '../hooks/useToast';
+import { createExpense, deleteExpense, getExpenses, getExpenseSummary, updateExpense } from '../services/expenseService';
+import { commonCategories } from '../utils/expenseUtils';
 import { formatCurrency, toInputDate } from '../utils/formatters';
 
 const emptyForm = {
@@ -26,101 +29,175 @@ const emptyForm = {
   date: toInputDate(),
 };
 
+const emptySummary = {
+  stats: {
+    total: 0,
+    monthly: 0,
+    average: 0,
+    count: 0,
+    topCategory: 'None',
+    topCategoryAmount: 0,
+    categoryCount: 0,
+  },
+  categories: [],
+  daily: [],
+  categoryNames: [],
+};
+
+function requestCanceled(error) {
+  return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+}
+
+function expenseMatchesFilters(expense, filters, search) {
+  if (filters.category !== 'all' && expense.category !== filters.category) return false;
+
+  const normalizedSearch = search.trim().toLowerCase();
+  if (normalizedSearch && !String(expense.description || '').toLowerCase().includes(normalizedSearch)) {
+    return false;
+  }
+
+  const createdAt = new Date(expense.createdAt || expense.date);
+  if (filters.fromDate) {
+    const start = new Date(filters.fromDate);
+    start.setHours(0, 0, 0, 0);
+    if (createdAt < start) return false;
+  }
+  if (filters.toDate) {
+    const end = new Date(filters.toDate);
+    end.setHours(23, 59, 59, 999);
+    if (createdAt > end) return false;
+  }
+
+  return true;
+}
+
 export default function DashboardPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [filters, setFilters] = useState({ category: 'all', fromDate: '', toDate: '' });
   const [searchText, setSearchText] = useState('');
+  const debouncedSearch = useDebouncedValue(searchText, 250);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expenses, setExpenses] = useState([]);
-  const [allExpenses, setAllExpenses] = useState([]);
-  const [categories, setCategories] = useState(commonCategories);
+  const [summary, setSummary] = useState(emptySummary);
   const [budgetRefresh, setBudgetRefresh] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { toast, showToast, closeToast } = useToast();
   const limit = 10;
 
-  const fetchExpenses = useCallback(async () => {
-    setError('');
-    try {
-      const params = {
-        page,
-        limit,
-        ...(filters.category !== 'all' && { category: filters.category }),
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
-        search: searchText,
-      };
-      const response = await getExpenses(params);
-      const payload = response.data || {};
-      const nextExpenses = payload.expenses || [];
-      const nextTotalPages = payload.totalPages || 1;
-      setExpenses(nextExpenses);
-      setTotalPages(nextTotalPages);
-      setPage(Math.min(payload.page || page, nextTotalPages));
-      setCategories((current) => mergeCategories(nextExpenses, current));
-    } catch {
-      setExpenses([]);
-      setTotalPages(1);
-      setError('Expenses could not be loaded. Refresh or sign in again.');
-    }
-  }, [filters, page, searchText]);
+  const pageParams = useMemo(() => ({
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    ...(filters.category !== 'all' && { category: filters.category }),
+    fromDate: filters.fromDate,
+    toDate: filters.toDate,
+    search: debouncedSearch,
+  }), [debouncedSearch, filters.category, filters.fromDate, filters.toDate, page, sortBy, sortOrder]);
 
-  const fetchAllExpenses = useCallback(async () => {
-    try {
-      const response = await getExpenses({
-        page: 1,
-        limit: 1000000,
-        ...(filters.category !== 'all' && { category: filters.category }),
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
-        search: searchText,
-      });
-      const nextExpenses = response.data.expenses || [];
-      setAllExpenses(nextExpenses);
-      setCategories((current) => mergeCategories(nextExpenses, current));
-    } catch {
-      setAllExpenses([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, searchText]);
+  const summaryParams = useMemo(() => ({
+    ...(filters.category !== 'all' && { category: filters.category }),
+    fromDate: filters.fromDate,
+    toDate: filters.toDate,
+    search: debouncedSearch,
+  }), [debouncedSearch, filters.category, filters.fromDate, filters.toDate]);
 
-  useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
+  const categories = useMemo(
+    () => Array.from(new Set([...commonCategories, ...(summary.categoryNames || [])])),
+    [summary.categoryNames]
+  );
 
   useEffect(() => {
     setPage(1);
-    fetchAllExpenses();
-  }, [fetchAllExpenses]);
+  }, [debouncedSearch, filters.category, filters.fromDate, filters.toDate, sortBy, sortOrder]);
 
-  const sortedExpenses = useMemo(() => sortExpenses(expenses, sortBy, sortOrder), [expenses, sortBy, sortOrder]);
-  const sortedChartExpenses = useMemo(() => sortExpenses(allExpenses, sortBy, sortOrder), [allExpenses, sortBy, sortOrder]);
-  const stats = useMemo(() => getExpenseStats(allExpenses), [allExpenses]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setPageLoading(true);
+    setError('');
 
-  const resetForm = () => {
-    setForm(emptyForm);
+    getExpenses(pageParams, { signal: controller.signal })
+      .then((response) => {
+        const payload = response.data || {};
+        const nextTotalPages = payload.totalPages || 1;
+        setExpenses(payload.expenses || []);
+        setTotalPages(nextTotalPages);
+        setPage((current) => Math.min(payload.page || current, nextTotalPages));
+      })
+      .catch((apiError) => {
+        if (requestCanceled(apiError)) return;
+        setExpenses([]);
+        setTotalPages(1);
+        setError('Expenses could not be loaded.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPageLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [pageParams, refreshKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSummaryLoading(true);
+
+    getExpenseSummary(summaryParams, { signal: controller.signal })
+      .then((response) => {
+        setSummary({
+          ...emptySummary,
+          ...response.data,
+          stats: { ...emptySummary.stats, ...(response.data.stats || {}) },
+        });
+      })
+      .catch((apiError) => {
+        if (!requestCanceled(apiError)) {
+          setSummary(emptySummary);
+          setError('Summary could not be loaded.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSummaryLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [summaryParams, refreshKey]);
+
+  const resetForm = useCallback(() => {
+    setForm({ ...emptyForm, date: toInputDate() });
     setEditingId(null);
-  };
+  }, []);
 
-  const refreshAll = () => {
-    fetchExpenses();
-    fetchAllExpenses();
+  const refreshLightweightData = useCallback(() => {
+    setRefreshKey((current) => current + 1);
     setBudgetRefresh((current) => current + 1);
-  };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setSaving(true);
     try {
-      await createExpense(form);
+      const response = await createExpense(form);
+      const savedExpense = response.data;
       resetForm();
-      refreshAll();
+
+      if (page === 1 && expenseMatchesFilters(savedExpense, filters, debouncedSearch)) {
+        setExpenses((current) => [savedExpense, ...current].slice(0, limit));
+      }
+
+      refreshLightweightData();
+      showToast('Expense added.');
     } catch {
-      setError('Expense could not be saved.');
+      showToast('Expense could not be saved.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -137,27 +214,43 @@ export default function DashboardPage() {
 
   const handleSave = async () => {
     if (!editingId) return;
+    setSaving(true);
     try {
-      await updateExpense(editingId, form);
+      const response = await updateExpense(editingId, form);
+      const updatedExpense = response.data;
+      setExpenses((current) =>
+        current
+          .map((expense) => (expense._id === editingId ? updatedExpense : expense))
+          .filter((expense) => expenseMatchesFilters(expense, filters, debouncedSearch))
+      );
       resetForm();
-      refreshAll();
+      refreshLightweightData();
+      showToast('Expense updated.');
     } catch {
-      setError('Expense update failed.');
+      showToast('Expense update failed.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
+    const previousExpenses = expenses;
+    setExpenses((current) => current.filter((expense) => expense._id !== id));
+
     try {
       await deleteExpense(id);
-      refreshAll();
+      if (previousExpenses.length === 1 && page > 1) setPage((current) => current - 1);
+      refreshLightweightData();
+      showToast('Expense deleted.');
     } catch {
-      setError('Expense could not be deleted.');
+      setExpenses(previousExpenses);
+      showToast('Expense could not be deleted.', 'error');
     }
   };
 
   const handleExportCSV = () => {
     const csv = Papa.unparse(
-      sortedExpenses.map(({ description, amount, category, createdAt, date }) => ({
+      expenses.map(({ description, amount, category, createdAt, date }) => ({
         description,
         amount,
         category,
@@ -175,14 +268,15 @@ export default function DashboardPage() {
     setPage(1);
   };
 
-  if (loading) return <LoadingState label="Preparing your financial workspace" />;
+  const loading = pageLoading && summaryLoading && !expenses.length && !summary.stats.count;
+  if (loading) return <LoadingState label="Loading your expenses" />;
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={2.5}>
       <Stack spacing={0.5}>
-        <Typography variant="h2">Financial command center</Typography>
+        <Typography variant="h2">Overview</Typography>
         <Typography variant="body1" color="text.secondary">
-          Track spend, control budgets, and spot category pressure before it compounds.
+          A clear view of spending, budgets, and recent activity.
         </Typography>
       </Stack>
 
@@ -191,42 +285,42 @@ export default function DashboardPage() {
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Total tracked"
-            value={formatCurrency(stats.total)}
-            helper={`${stats.count} transactions in scope`}
+            label="Total spent"
+            value={formatCurrency(summary.stats.total)}
+            helper={`${summary.stats.count} expenses`}
             icon={<AccountBalanceWalletOutlinedIcon />}
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
             label="This month"
-            value={formatCurrency(stats.monthly)}
-            helper="Current calendar month"
+            value={formatCurrency(summary.stats.monthly)}
+            helper="Current month"
             icon={<TrendingUpOutlinedIcon />}
             tone="secondary"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Top category"
-            value={stats.topCategory}
-            helper={formatCurrency(stats.topCategoryAmount)}
+            label="Largest category"
+            value={summary.stats.topCategory}
+            helper={formatCurrency(summary.stats.topCategoryAmount)}
             icon={<CategoryOutlinedIcon />}
             tone="warning"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <MetricCard
-            label="Average spend"
-            value={formatCurrency(stats.average)}
-            helper={`${stats.categoryCount} active categories`}
+            label="Average"
+            value={formatCurrency(summary.stats.average)}
+            helper={`${summary.stats.categoryCount} categories`}
             icon={<ReceiptLongOutlinedIcon />}
             tone="success"
           />
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2.5}>
         <Grid item xs={12} xl={7}>
           <ExpenseForm
             form={form}
@@ -236,22 +330,23 @@ export default function DashboardPage() {
             editing={Boolean(editingId)}
             onSave={handleSave}
             onCancel={resetForm}
+            saving={saving}
           />
         </Grid>
         <Grid item xs={12} xl={5}>
-          <BudgetCard refreshTrigger={budgetRefresh} refreshExpenses={fetchExpenses} />
+          <BudgetCard refreshTrigger={budgetRefresh} />
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2.5}>
         <Grid item xs={12} xl={7}>
-          <Panel title="Spend Trend" eyebrow="Daily movement">
-            <ExpenseTrendChart expenses={sortedChartExpenses} />
+          <Panel title="Spending Trend" eyebrow="Trend">
+            <ExpenseTrendChart data={summary.daily} />
           </Panel>
         </Grid>
         <Grid item xs={12} xl={5}>
-          <Panel title="Category Mix" eyebrow="Allocation">
-            <ExpenseCategoryChart expenses={sortedChartExpenses} />
+          <Panel title="Categories" eyebrow="Breakdown">
+            <ExpenseCategoryChart data={summary.categories} />
           </Panel>
         </Grid>
       </Grid>
@@ -270,7 +365,8 @@ export default function DashboardPage() {
       />
 
       <ExpenseList
-        expenses={sortedExpenses}
+        expenses={expenses}
+        loading={pageLoading}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onExport={handleExportCSV}
@@ -278,6 +374,8 @@ export default function DashboardPage() {
         totalPages={totalPages}
         setPage={setPage}
       />
+
+      <Toast toast={toast} onClose={closeToast} />
     </Stack>
   );
 }

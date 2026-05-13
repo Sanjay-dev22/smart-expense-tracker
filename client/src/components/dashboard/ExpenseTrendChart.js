@@ -26,9 +26,9 @@ function TrendTooltip({ active, payload, label }) {
   );
 }
 
-export default function ExpenseTrendChart({ expenses }) {
+export default function ExpenseTrendChart({ expenses = [], data: providedData }) {
   const theme = useTheme();
-  const data = getDailyTrendData(expenses);
+  const data = providedData || getDailyTrendData(expenses);
 
   if (!data.length) {
     return (

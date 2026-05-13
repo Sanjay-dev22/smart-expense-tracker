@@ -1,16 +1,88 @@
-// server/routes/expenses.js
-const express  = require('express');
+const express = require('express');
 const mongoose = require('mongoose');
-const router   = express.Router();
-const Expense  = require('../models/Expense');
-const Budget   = require('../models/Budget');
-const User     = require('../models/User');
-const auth     = require('../middleware/authMiddleware');
+const router = express.Router();
+const Expense = require('../models/Expense');
+const Budget = require('../models/Budget');
+const User = require('../models/User');
+const auth = require('../middleware/authMiddleware');
+const runBackgroundTask = require('../utils/backgroundTask');
 const sendBudgetAlertEmail = require('../utils/sendBudgetAlertEmail');
 
 router.use(auth);
 
-// GET all expenses with filters, sorting, and pagination
+const SORT_FIELDS = new Set(['createdAt', 'amount', 'category', 'description']);
+const MAX_LIMIT = 100;
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getDateRange(fromDate, toDate) {
+  if (!fromDate && !toDate) return null;
+
+  const createdAt = {};
+  if (fromDate) {
+    const start = new Date(fromDate);
+    start.setHours(0, 0, 0, 0);
+    createdAt.$gte = start;
+  }
+  if (toDate) {
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+    createdAt.$lte = end;
+  }
+  return createdAt;
+}
+
+function buildQuery(queryParams, userId, aggregate = false) {
+  const query = {
+    userId: aggregate ? new mongoose.Types.ObjectId(userId) : userId,
+  };
+
+  const { category, fromDate, toDate, search } = queryParams;
+  if (category && category !== 'all') query.category = category;
+
+  const dateRange = getDateRange(fromDate, toDate);
+  if (dateRange) query.createdAt = dateRange;
+
+  if (search) {
+    query.description = { $regex: escapeRegex(search), $options: 'i' };
+  }
+
+  return query;
+}
+
+async function sendBudgetAlertIfNeeded(userId, expenseDate) {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const date = new Date(expenseDate);
+
+  if (date.getMonth() !== currentMonth || date.getFullYear() !== currentYear) return;
+
+  const [user, budget, totals] = await Promise.all([
+    User.findById(userId).select('email name').lean(),
+    Budget.findOne({ userId, month: currentMonth, year: currentYear }).lean(),
+    Expense.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          createdAt: {
+            $gte: new Date(currentYear, currentMonth, 1),
+            $lte: new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999),
+          },
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
+  ]);
+
+  const spent = totals.length ? totals[0].total : 0;
+  if (user && budget && spent > budget.amount) {
+    await sendBudgetAlertEmail(user.email, user.name || 'there', spent, budget.amount);
+  }
+}
+
 router.get('/', async (req, res) => {
   try {
     const {
@@ -18,189 +90,173 @@ router.get('/', async (req, res) => {
       limit = 10,
       sortBy = 'createdAt',
       sortOrder = 'desc',
-      category,
-      fromDate,
-      toDate,
-      search
     } = req.query;
 
-    const pageNumber  = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
-
-    const query = { userId: req.user.id };
-    if (category && category !== 'all') query.category = category;
-    if (fromDate || toDate) {
-      query.createdAt = {};
-      if (fromDate) {
-        const start = new Date(fromDate);
-        start.setHours(0, 0, 0, 0);
-        query.createdAt.$gte = start;
-      }
-      if (toDate) {
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
-      }
-    }
-    if (search) {
-      query.description = { $regex: search, $options: 'i' };
-    }
-
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.min(Math.max(parseInt(limit, 10) || 10, 1), MAX_LIMIT);
+    const sortField = SORT_FIELDS.has(sortBy) ? sortBy : 'createdAt';
     const sortDir = sortOrder === 'asc' ? 1 : -1;
-    const sortObj = { [sortBy]: sortDir };
+    const query = buildQuery(req.query, req.user.id);
 
-    const total      = await Expense.countDocuments(query);
+    const [total, expenses] = await Promise.all([
+      Expense.countDocuments(query),
+      Expense.find(query)
+        .sort({ [sortField]: sortDir, _id: sortDir })
+        .skip((pageNumber - 1) * limitNumber)
+        .limit(limitNumber)
+        .lean(),
+    ]);
+
     const totalPages = Math.max(Math.ceil(total / limitNumber), 1);
-
-    const expenses = await Expense.find(query)
-      .sort(sortObj)
-      .skip((pageNumber - 1) * limitNumber)
-      .limit(limitNumber);
 
     res.json({
       expenses,
       total,
-      page: pageNumber,
-      totalPages
+      page: Math.min(pageNumber, totalPages),
+      totalPages,
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST new expense, optional date, and budget‐exceeded email
+router.get('/summary', async (req, res) => {
+  try {
+    const match = buildQuery(req.query, req.user.id, true);
+    const categoryNameMatch = buildQuery({ ...req.query, category: 'all' }, req.user.id, true);
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const [[summary], categoryNames] = await Promise.all([
+      Expense.aggregate([
+        { $match: match },
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: '$amount' },
+                  count: { $sum: 1 },
+                  average: { $avg: '$amount' },
+                },
+              },
+            ],
+            monthly: [
+              { $match: { createdAt: { $gte: currentMonthStart, $lt: nextMonthStart } } },
+              { $group: { _id: null, total: { $sum: '$amount' } } },
+            ],
+            categories: [
+              { $group: { _id: '$category', value: { $sum: '$amount' } } },
+              { $sort: { value: -1 } },
+              { $limit: 12 },
+              { $project: { _id: 0, name: { $ifNull: ['$_id', 'Uncategorized'] }, value: 1 } },
+            ],
+            daily: [
+              {
+                $group: {
+                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                  amount: { $sum: '$amount' },
+                },
+              },
+              { $sort: { _id: -1 } },
+              { $limit: 90 },
+              { $sort: { _id: 1 } },
+              { $project: { _id: 0, date: '$_id', amount: 1 } },
+            ],
+          },
+        },
+      ]),
+      Expense.aggregate([
+        { $match: categoryNameMatch },
+        { $group: { _id: '$category' } },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 0, name: { $ifNull: ['$_id', 'Uncategorized'] } } },
+      ]),
+    ]);
+
+    const totals = summary?.totals?.[0] || {};
+    const monthly = summary?.monthly?.[0]?.total || 0;
+    const categories = summary?.categories || [];
+    const topCategory = categories[0] || { name: 'None', value: 0 };
+
+    res.json({
+      stats: {
+        total: totals.total || 0,
+        monthly,
+        average: totals.average || 0,
+        count: totals.count || 0,
+        topCategory: topCategory.name,
+        topCategoryAmount: topCategory.value,
+        categoryCount: categories.length,
+      },
+      categories,
+      daily: summary?.daily || [],
+      categoryNames: categoryNames.map((item) => item.name).filter(Boolean),
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.post('/', async (req, res) => {
   try {
     const { description, amount, category, date } = req.body;
     const createdAt = date ? new Date(date) : new Date();
 
-    // 1) Save the expense
-    const exp = new Expense({
+    const saved = await Expense.create({
       description,
-      amount,
+      amount: Number(amount),
       category,
       createdAt,
-      userId: req.user.id
+      userId: req.user.id,
     });
-    const saved = await exp.save();
 
-    // Only send alerts for **this calendar month/year**:
-    const now     = new Date();
-    const currM   = now.getMonth();
-    const currY   = now.getFullYear();
-
-    // If expense’s date isn’t in the current real month, skip
-    if (createdAt.getMonth() === currM && createdAt.getFullYear() === currY) {
-      // 2) Load User & Budget for current month/year
-      const user   = await User.findById(req.user.id);
-      const budget = await Budget.findOne({ userId: req.user.id, month: currM, year: currY });
-
-      if (user && budget) {
-        // 3) Compute total spent THIS real month
-        const agg = await Expense.aggregate([
-          {
-            $match: {
-              userId: new mongoose.Types.ObjectId(req.user.id),
-              createdAt: {
-                $gte: new Date(currY, currM, 1),
-                $lte: new Date(currY, currM + 1, 0, 23, 59, 59, 999)
-              }
-            }
-          },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]);
-        const spentSoFar = agg.length ? agg[0].total : 0;
-
-        // 4) If over‐budget, send an email
-        if (spentSoFar > budget.amount) {
-          await sendBudgetAlertEmail(
-            user.email,
-            user.name || 'User',
-            spentSoFar,
-            budget.amount
-          );
-        }
-      }
-    }
-
-    return res.status(201).json(saved);
+    res.status(201).json(saved);
+    runBackgroundTask('budget-alert-create', () => sendBudgetAlertIfNeeded(req.user.id, createdAt));
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// DELETE expense
 router.delete('/:id', async (req, res) => {
   try {
     const expense = await Expense.findOneAndDelete({
       _id: req.params.id,
-      userId: req.user.id
+      userId: req.user.id,
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     res.json({ message: 'Expense deleted' });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to delete expense' });
   }
 });
 
-// PUT edit expense (including date) and budget‐exceeded email
 router.put('/:id', async (req, res) => {
   try {
     const { description, amount, category, date } = req.body;
-    const update = { description, amount, category };
+    const update = {
+      description,
+      amount: Number(amount),
+      category,
+    };
     if (date) update.createdAt = new Date(date);
 
-    const updatedExp = await Expense.findOneAndUpdate(
+    const updatedExpense = await Expense.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.id },
       update,
-      { new: true }
-    );
-    if (!updatedExp) {
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!updatedExpense) {
       return res.status(404).json({ error: 'Expense not found or unauthorized' });
     }
 
-    // Only alert if the **edited** date falls in the current real month/year
-    const now     = new Date();
-    const currM   = now.getMonth();
-    const currY   = now.getFullYear();
-    const expDate = updatedExp.createdAt;
-    if (expDate.getMonth() === currM && expDate.getFullYear() === currY) {
-      const user   = await User.findById(req.user.id);
-      const budget = await Budget.findOne({ userId: req.user.id, month: currM, year: currY });
-
-      if (user && budget) {
-        const agg = await Expense.aggregate([
-          {
-            $match: {
-              userId: new mongoose.Types.ObjectId(req.user.id),
-              createdAt: {
-                $gte: new Date(currY, currM, 1),
-                $lte: new Date(currY, currM + 1, 0, 23, 59, 59, 999)
-              }
-            }
-          },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]);
-        const spentSoFar = agg.length ? agg[0].total : 0;
-
-        if (spentSoFar > budget.amount) {
-          await sendBudgetAlertEmail(
-            user.email,
-            user.name || 'User',
-            spentSoFar,
-            budget.amount
-          );
-        }
-      }
-    }
-
-    return res.json(updatedExp);
+    res.json(updatedExpense);
+    runBackgroundTask('budget-alert-update', () => sendBudgetAlertIfNeeded(req.user.id, updatedExpense.createdAt));
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

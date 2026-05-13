@@ -1,44 +1,25 @@
-// server\utils\sendVerificationEmail.js
+const { sendMail } = require('./mailer');
 
-const nodemailer = require('nodemailer');
-
-const sendVerificationEmail = async (email, token) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-
-  // ✅ Updated: Verification URL should point to backend route, not frontend
+async function sendVerificationEmail(email, token) {
   const verificationUrl = `${process.env.BACKEND_URL}/api/auth/verify-email?token=${token}`;
 
-  await transporter.sendMail({
-    from: `"Smart Expense Tracker" <${process.env.EMAIL_USER}>`,
+  return sendMail({
     to: email,
-    subject: 'Verify your Email Address',
+    subject: 'Verify your email address',
     html: `
-      <p>Hi there!</p>
-      <p>Please click the button below to verify your email address:</p>
-      <p>
-        <a href="${verificationUrl}" style="
-          display: inline-block;
-          padding: 10px 20px;
-          background-color: #1976d2;
-          color: white;
-          text-decoration: none;
-          border-radius: 5px;
-        ">
-          Verify Email
-        </a>
-      </p>
-      <p>If the button doesn't work, you can also click this link:</p>
-      <p><a href="${verificationUrl}">${verificationUrl}</a></p>
-      <br/>
-      <p>Thanks,<br/>Smart Expense Tracker Team</p>
-    `
+      <div style="font-family: Inter, Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <h2 style="margin: 0 0 12px;">Verify your email</h2>
+        <p>Confirm this email address to finish setting up your Smart Expense Tracker account.</p>
+        <p style="margin: 24px 0;">
+          <a href="${verificationUrl}" style="display:inline-block;padding:12px 18px;background:#111827;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">
+            Verify email
+          </a>
+        </p>
+        <p style="color:#667085;font-size:14px;">If the button does not work, open this link:</p>
+        <p style="word-break:break-all;"><a href="${verificationUrl}">${verificationUrl}</a></p>
+      </div>
+    `,
   });
-};
+}
 
 module.exports = sendVerificationEmail;

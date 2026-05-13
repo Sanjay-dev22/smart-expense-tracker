@@ -1,46 +1,25 @@
-// server\utils\sendResetEmail.js
+const { sendMail } = require('./mailer');
 
-const nodemailer = require('nodemailer');
-
-const sendResetEmail = async (email, token) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-
+async function sendResetEmail(email, token) {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
 
-  await transporter.sendMail({
-    from: `"Smart Expense Tracker" <${process.env.EMAIL_USER}>`,
+  return sendMail({
     to: email,
-    subject: 'Reset Your Password',
+    subject: 'Reset your password',
     html: `
-      <p>Hello,</p>
-      <p>We received a request to reset your password. Click the button below to proceed:</p>
-      <p>
-        <a href="${resetUrl}" style="
-          display: inline-block;
-          padding: 10px 20px;
-          background-color: #1976d2;
-          color: white;
-          text-decoration: none;
-          border-radius: 5px;
-          font-weight: bold;
-        ">
-          Reset Password
-        </a>
-      </p>
-      <p>If the button doesn't work, you can also click this link:</p>
-      <p><a href="${resetUrl}">${resetUrl}</a></p>
-      <br/>
-      <p><strong>This link will expire in 15 minutes.</strong></p>
-      <br/>
-      <p>Thanks,<br/>Smart Expense Tracker Team</p>
+      <div style="font-family: Inter, Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <h2 style="margin: 0 0 12px;">Reset your password</h2>
+        <p>Use the link below to choose a new password. This link expires in 15 minutes.</p>
+        <p style="margin: 24px 0;">
+          <a href="${resetUrl}" style="display:inline-block;padding:12px 18px;background:#111827;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">
+            Reset password
+          </a>
+        </p>
+        <p style="color:#667085;font-size:14px;">If the button does not work, open this link:</p>
+        <p style="word-break:break-all;"><a href="${resetUrl}">${resetUrl}</a></p>
+      </div>
     `,
   });
-};
+}
 
 module.exports = sendResetEmail;

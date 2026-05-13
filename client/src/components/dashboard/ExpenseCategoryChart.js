@@ -21,9 +21,9 @@ function ChartTooltip({ active, payload }) {
   );
 }
 
-export default function ExpenseCategoryChart({ expenses }) {
+export default function ExpenseCategoryChart({ expenses = [], data: providedData }) {
   const theme = useTheme();
-  const data = getCategoryData(expenses).slice(0, 6);
+  const data = (providedData || getCategoryData(expenses)).slice(0, 6);
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   if (!data.length) {

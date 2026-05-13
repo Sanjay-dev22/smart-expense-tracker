@@ -52,9 +52,9 @@ export default function AppLayout({ children, onLogout, mode, onToggleTheme }) {
             <AccountBalanceWalletOutlinedIcon fontSize="small" />
           </Box>
           <Box>
-            <Typography variant="h6">FinSight</Typography>
+            <Typography variant="h6">Smart Expense</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              Expense OS
+              Expenses and budgets
             </Typography>
           </Box>
         </Stack>
@@ -96,10 +96,10 @@ export default function AppLayout({ children, onLogout, mode, onToggleTheme }) {
         <Avatar sx={{ width: 36, height: 36, bgcolor: 'secondary.main', fontWeight: 800 }}>S</Avatar>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 800 }}>
-            Smart Tracker
+            Account
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Secured workspace
+            Signed in
           </Typography>
         </Box>
       </Stack>
@@ -176,7 +176,7 @@ export default function AppLayout({ children, onLogout, mode, onToggleTheme }) {
             )}
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
-                Workspace
+                Page
               </Typography>
               <Typography variant="h5">{activeLabel}</Typography>
             </Box>

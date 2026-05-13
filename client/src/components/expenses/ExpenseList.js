@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Chip, IconButton, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Skeleton, Stack, Typography } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
@@ -17,21 +17,28 @@ export default function ExpenseList({
   page,
   totalPages,
   setPage,
+  loading = false,
 }) {
   return (
     <Panel
       title="Expenses"
-      eyebrow="Ledger"
+      eyebrow="Recent"
       action={
         <Button variant="outlined" size="small" startIcon={<FileDownloadOutlinedIcon />} onClick={onExport} disabled={!expenses.length}>
           Export CSV
         </Button>
       }
     >
-      {!expenses.length ? (
+      {loading && !expenses.length ? (
+        <Stack spacing={1.25}>
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} variant="rounded" height={74} sx={{ borderRadius: 2 }} />
+          ))}
+        </Stack>
+      ) : !expenses.length ? (
         <EmptyState
           title="No expenses found"
-          description="Add a transaction or adjust filters to populate the ledger."
+          description="Add an expense or change the filters to see results."
         />
       ) : (
         <Stack spacing={1.25}>

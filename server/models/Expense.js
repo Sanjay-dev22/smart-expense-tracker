@@ -17,4 +17,8 @@ const ExpenseSchema = new mongoose.Schema({
   }
 });
 
+ExpenseSchema.index({ userId: 1, createdAt: -1 });
+ExpenseSchema.index({ userId: 1, category: 1, createdAt: -1 });
+ExpenseSchema.index({ userId: 1, description: 1 });
+
 module.exports = mongoose.model('Expense', ExpenseSchema);

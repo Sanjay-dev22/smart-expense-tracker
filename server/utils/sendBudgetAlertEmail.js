@@ -1,34 +1,18 @@
-// server/utils/sendBudgetAlertEmail.js
-
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const { sendMail } = require('./mailer');
 
 async function sendBudgetAlertEmail(to, name, spent, budget) {
-  console.log('📨 Email sending function triggered');
-  const mailOptions = {
-    from: `"Smart Expense Tracker" <${process.env.EMAIL_USER}>`,
+  return sendMail({
     to,
-    subject: '⚠️ Monthly Budget Exceeded!',
+    subject: 'Monthly budget exceeded',
     html: `
-      <h2>Hello ${name},</h2>
-      <p>You’ve spent <b>₹${spent}</b> this month, which exceeds your budget of <b>₹${budget}</b>.</p>
-      <p>Please review your expenses and plan accordingly.</p>
-      <p>– Smart Expense Tracker</p>
+      <div style="font-family: Inter, Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <h2 style="margin: 0 0 12px;">Monthly budget exceeded</h2>
+        <p>Hi ${name || 'there'},</p>
+        <p>Your spending for this month is now <strong>INR ${Number(spent).toFixed(2)}</strong>, above your budget of <strong>INR ${Number(budget).toFixed(2)}</strong>.</p>
+        <p>Open Smart Expense Tracker to review recent expenses and adjust the plan.</p>
+      </div>
     `,
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-  } catch (err) {
-    console.error('❌ Email send failed:', err);
-  }
+  });
 }
 
 module.exports = sendBudgetAlertEmail;
