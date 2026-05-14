@@ -44,16 +44,14 @@ router.post('/register', async (req, res) => {
       name: name.trim(),
       email: normalizedEmail,
       password,
-      verified: false,
+      verified: true,
     });
     await user.save();
 
-    res.status(201).json({
-      message: 'Account created. Check your email to verify it.',
-      emailQueued: true,
-    });
+  res.status(201).json({
+    message: 'Account created successfully.',
+  });
 
-    queueVerificationEmail(user);
   } catch (err) {
     res.status(500).json({ message: 'Registration failed', error: err.message });
   }
